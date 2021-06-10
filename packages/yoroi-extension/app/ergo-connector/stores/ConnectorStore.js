@@ -204,7 +204,7 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
   @action
   _cancelSignInTx: void => void = () => {
     if (this.signingMessage == null) {
-      throw new Error(`${nameof(this._confirmSignInTx)} confirming a tx but no signing message set`);
+      throw new Error(`${nameof(this._cancelSignInTx)} cancelling a tx but no signing message set`);
     }
     const { signingMessage } = this;
     const sendData: FailedSignData = {
