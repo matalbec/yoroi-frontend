@@ -1,7 +1,6 @@
 // @flow
 
 import Store from '../../base/Store';
-import { HaskellShelleyTxSignRequest } from '../../../api/ada/transactions/shelley/HaskellShelleyTxSignRequest';
 import {
   Logger,
   stringifyError,
@@ -42,9 +41,9 @@ export default class AdaMnemonicSendStore extends Store<StoresMap, ActionsMap> {
     publicDeriver: PublicDeriver<>,
     onSuccess?: void => void,
   |} => Promise<void> = async (request) => {
-    if (!(request.signRequest instanceof HaskellShelleyTxSignRequest)) {
-      throw new Error(`${nameof(this._sendMoney)} wrong tx sign request`);
-    }
+    // if (!(request.signRequest instanceof HaskellShelleyTxSignRequest)) {
+    //   throw new Error(`${nameof(this._sendMoney)} wrong tx sign request`);
+    // }
 
     await this.stores.substores.ada.wallets.adaSendAndRefresh({
       broadcastRequest: {
@@ -67,7 +66,7 @@ export default class AdaMnemonicSendStore extends Store<StoresMap, ActionsMap> {
   };
 
   signAndBroadcast: {|
-    signRequest: HaskellShelleyTxSignRequest,
+    signRequest: ISignRequest<any>,
     password: string,
     publicDeriver: PublicDeriver<>,
   |} => Promise<{| txId: string |}> = async (request) => {
@@ -97,14 +96,16 @@ export default class AdaMnemonicSendStore extends Store<StoresMap, ActionsMap> {
             ).to_bytes()
           ).toString('hex')
         )) {
-          neededStakingKeyHashes.wits.add(
-            Buffer.from(RustModule.WalletV4.make_vkey_witness(
-              RustModule.WalletV4.hash_transaction(
-                request.signRequest.unsignedTx.build()
-              ),
-              stakingKey
-            ).to_bytes()).toString('hex')
-          );
+          // ToDo: re-enable this
+          throw new Error('TEMPORARILY DISABLED');
+          // neededStakingKeyHashes.wits.add(
+          //   Buffer.from(RustModule.WalletV4.make_vkey_witness(
+          //     RustModule.WalletV4.hash_transaction(
+          //       request.signRequest.unsignedTx.build()
+          //     ),
+          //     stakingKey
+          //   ).to_bytes()).toString('hex')
+          // );
         } else {
           throw new Error(`${nameof(this.signAndBroadcast)} Missing witness but it was not ours`);
         }

@@ -2,6 +2,7 @@
 
 import BigNumber from 'bignumber.js';
 import { ISignRequest } from '../../../common/lib/transactions/ISignRequest';
+import type { SignedTx, TxMetadata } from '../../../common/lib/transactions/ISignRequest';
 import type { CardanoAddressedUtxo } from '../types';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { toHexOrBase58 } from '../../lib/storage/bridge/utils';
@@ -46,13 +47,21 @@ export class YoroiLibSignRequest implements ISignRequest<UnsignedTx> {
   _unsignedTx: UnsignedTx
   _networkSettingSnapshot: NetworkSettingSnapshot
 
+  neededStakingKeyHashes: {|
+    neededHashes: Set<string>, // StakeCredential
+    wits: Set<string>, // Vkeywitness
+  |}
+
   constructor(
     unsignedTx: UnsignedTx,
+    neededStakingKeyHashes: {|
+      neededHashes: Set<string>, // StakeCredential
+      wits: Set<string>, // Vkeywitness
+    |},
     networkSettingSnapshot: NetworkSettingSnapshot) {
     this._unsignedTx = unsignedTx;
+    this.neededStakingKeyHashes = neededStakingKeyHashes;
     this._networkSettingSnapshot = networkSettingSnapshot;
-    console.log(this._unsignedTx.inputs);
-    console.log(this._unsignedTx.outputs);
   }
 
   toMultiToken(ma: YoroiLibModels.MultiTokenConstruct): MultiToken {
@@ -134,6 +143,26 @@ export class YoroiLibSignRequest implements ISignRequest<UnsignedTx> {
 
   self(): UnsignedTx {
     return this._unsignedTx;
+  }
+
+  async sign(keyLevel: number,
+    privateKey: string,
+    stakingKeyWits: Set<string>,
+    metadata: TxMetadata[]
+  ): Promise<SignedTx> {
+    const signedTx = await this._unsignedTx.sign(
+      keyLevel,
+      privateKey,
+      stakingKeyWits,
+      metadata.map(m => {
+        return {
+          data: m.data,
+          label: m.label
+        }
+      })
+    );
+
+    return signedTx;
   }
 }
 
@@ -398,6 +427,15 @@ implements ISignRequest<RustModule.WalletV4.TransactionBuilder> {
 
   self(): RustModule.WalletV4.TransactionBuilder {
     return this.unsignedTx;
+  }
+
+  /* eslint-disable no-unused-vars */
+  async sign(keyLevel: number,
+    privateKey: string,
+    stakingKeyWits: Set<string>,
+    metadata: TxMetadata[]
+  ): Promise<SignedTx> {
+    throw new Error('Signing not implemented on HaskellShelleyTxSignRequest');
   }
 }
 

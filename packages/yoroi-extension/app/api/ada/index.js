@@ -85,7 +85,6 @@ import type {
 import {
   sendAllUnsignedTx as shelleySendAllUnsignedTx,
   newAdaUnsignedTx as shelleyNewAdaUnsignedTx,
-  signTransaction as shelleySignTransaction,
 } from './transactions/shelley/transactions';
 import {
   generateWalletRootKey,
@@ -186,6 +185,7 @@ import type { DefaultTokenEntry } from '../common/lib/MultiToken';
 import { hasSendAllDefault, builtSendTokenList } from '../common/index';
 import { getReceiveAddress } from '../../stores/stateless/addressStores';
 import { generateRegistrationMetadata } from './lib/cardanoCrypto/catalyst';
+import { ISignRequest } from '../common/lib/transactions/ISignRequest';
 
 // ADA specific Request / Response params
 
@@ -272,7 +272,7 @@ export type GetNoticesFunc = (
 
 export type SignAndBroadcastRequest = {|
   publicDeriver: IPublicDeriver<ConceptualWallet & IHasLevels> & IGetSigningKey,
-  signRequest: HaskellShelleyTxSignRequest,
+  signRequest: ISignRequest<any>,
   password: string,
   sendTx: SendFunc,
 |};
@@ -830,24 +830,42 @@ export default class AdaApi {
         ...signingKey,
         password,
       });
-      const signedTx = shelleySignTransaction(
-        request.signRequest.senderUtxos,
-        request.signRequest.unsignedTx,
-        request.publicDeriver.getParent().getPublicDeriverLevel(),
-        RustModule.WalletV4.Bip32PrivateKey.from_bytes(
-          Buffer.from(normalizedKey.prvKeyHex, 'hex')
-        ),
-        request.signRequest.neededStakingKeyHashes.wits,
-        request.signRequest.metadata,
+
+      const keyLevel = request.publicDeriver.getParent().getPublicDeriverLevel()
+
+      // ToDo: find a way to set the stakingKeyWits and metadata here
+      const signedTx = await request.signRequest.sign(
+        keyLevel,
+        normalizedKey.prvKeyHex,
+        new Set<string>(),
+        []
       );
 
       const response = request.sendTx({
         network: request.publicDeriver.getParent().getNetworkInfo(),
-        id: Buffer.from(
-          RustModule.WalletV4.hash_transaction(signedTx.body()).to_bytes()
-        ).toString('hex'),
-        encodedTx: signedTx.to_bytes(),
+        id: signedTx.id,
+        encodedTx: signedTx.encodedTx,
       });
+
+      // const signedTx = shelleySignTransaction(
+      //   request.signRequest.senderUtxos,
+      //   request.signRequest.unsignedTx,
+      //   request.publicDeriver.getParent().getPublicDeriverLevel(),
+      //   RustModule.WalletV4.Bip32PrivateKey.from_bytes(
+      //     Buffer.from(normalizedKey.prvKeyHex, 'hex')
+      //   ),
+      //   request.signRequest.neededStakingKeyHashes.wits,
+      //   request.signRequest.metadata,
+      // );
+
+      // const response = request.sendTx({
+      //   network: request.publicDeriver.getParent().getNetworkInfo(),
+      //   id: Buffer.from(
+      //     RustModule.WalletV4.hash_transaction(signedTx.body()).to_bytes()
+      //   ).toString('hex'),
+      //   encodedTx: signedTx.to_bytes(),
+      // });
+
       Logger.debug(
         `${nameof(AdaApi)}::${nameof(this.signAndBroadcast)} success: ` + stringifyData(response)
       );
@@ -1194,6 +1212,10 @@ export default class AdaApi {
     return new YoroiLibSignRequest(
       unsignedTx,
       {
+        neededHashes: new Set(),
+        wits: new Set(),
+      },
+      {
         ChainNetworkId: Number.parseInt(config.ChainNetworkId, 10),
         KeyDeposit: new BigNumber(config.KeyDeposit),
         PoolDeposit: new BigNumber(config.PoolDeposit),
@@ -1205,7 +1227,6 @@ export default class AdaApi {
   async createUnsignedTx(
     request: CreateUnsignedTxRequest
   ): Promise<CreateUnsignedTxResponse> {
-    console.log('TEST');
     await this.createUnsignedTxUsingYoroiLib(request);
 
     const utxos = await request.publicDeriver.getAllUtxos();
