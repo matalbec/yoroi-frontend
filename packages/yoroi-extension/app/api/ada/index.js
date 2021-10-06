@@ -1173,7 +1173,7 @@ export default class AdaApi {
       defaultIdentifier: defaultToken.defaultIdentifier,
     };
 
-    const yoroiLibBrowser = await import('yoroi-lib-browser/dist/yoroi-lib-browser/src');
+    const yoroiLibBrowser = await import('@emurgo/yoroi-lib-browser');
     const init = yoroiLibBrowser.init;
     const yoroiLib = init();
 

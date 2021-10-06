@@ -10,8 +10,8 @@ import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/e
 import { multiTokenFromCardanoValue, multiTokenFromRemote } from '../utils';
 import type { Address, Addressing, Value, } from '../../lib/storage/models/PublicDeriver/interfaces';
 
-import { UnsignedTx } from 'yoroi-lib-browser/dist/yoroi-lib-core/src/tx';
-import * as YoroiLibModels from 'yoroi-lib-browser/dist/yoroi-lib-core/src/models';
+import { UnsignedTx } from '@emurgo/yoroi-lib-core/dist/tx';
+import * as YoroiLibModels from '@emurgo/yoroi-lib-core/dist/models';
 
 /**
  * We take a copy of these parameters instead of re-evaluating them from the network
