@@ -10,6 +10,9 @@ import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/e
 import { multiTokenFromCardanoValue, multiTokenFromRemote } from '../utils';
 import type { Address, Addressing, Value, } from '../../lib/storage/models/PublicDeriver/interfaces';
 
+import { UnsignedTx } from 'yoroi-lib-browser/dist/yoroi-lib-core/src/tx';
+import * as YoroiLibModels from 'yoroi-lib-browser/dist/yoroi-lib-core/src/models';
+
 /**
  * We take a copy of these parameters instead of re-evaluating them from the network
  * There are two reasons for this
@@ -38,6 +41,101 @@ type LedgerNanoCatalystRegistrationTxSignData = {|
 
 type TrezorTCatalystRegistrationTxSignData =
   LedgerNanoCatalystRegistrationTxSignData;
+
+export class YoroiLibSignRequest implements ISignRequest<UnsignedTx> {
+  _unsignedTx: UnsignedTx
+  _networkSettingSnapshot: NetworkSettingSnapshot
+
+  constructor(
+    unsignedTx: UnsignedTx,
+    networkSettingSnapshot: NetworkSettingSnapshot) {
+    this._unsignedTx = unsignedTx;
+    this._networkSettingSnapshot = networkSettingSnapshot;
+    console.log(this._unsignedTx.inputs);
+    console.log(this._unsignedTx.outputs);
+  }
+
+  toMultiToken(ma: YoroiLibModels.MultiTokenConstruct): MultiToken {
+    return new MultiToken(
+      ma.values.map(v => {
+        return {
+          amount: v.amount,
+          identifier: v.identifier,
+          networkId: v.networkId
+        }
+      }),
+      {
+        defaultIdentifier: ma.defaults.defaultIdentifier,
+        defaultNetworkId: ma.defaults.defaultNetworkId,
+      }
+    )
+  }
+
+  inputs(): Array<{|
+    address: string,
+    value: MultiToken,
+  |}> {
+    return this._unsignedTx.inputs.map(i => {
+      return {
+        address: i.address,
+        value: this.toMultiToken(i.value)
+      }
+    });
+  }
+
+  totalInput(): MultiToken {
+    return this.toMultiToken(this._unsignedTx.totalInput);
+  }
+
+  outputs(): Array<{|
+    address: string,
+    value: MultiToken,
+  |}> {
+    return this._unsignedTx.outputs.map(i => {
+      return {
+        address: i.address,
+        value: this.toMultiToken(i.value)
+      }
+    })
+  }
+
+  totalOutput(): MultiToken {
+    return this.toMultiToken(this._unsignedTx.totalOutput);
+  }
+
+  fee(): MultiToken {
+    return this.toMultiToken(this._unsignedTx.fee);
+  }
+
+  uniqueSenderAddresses(): Array<string> {
+    return Array.from(new Set(this._unsignedTx.senderUtxos.map(utxo => utxo.receiver)));
+  }
+
+  receivers(includeChange: boolean): Array<string> {
+    const outputs = this._unsignedTx.outputs;
+
+    const outputStrings = [];
+    for (let i = 0; i < outputs.length; i++) {
+      const output = outputs[i];
+      outputStrings.push(output.address);
+    }
+
+    if (!includeChange) {
+      const changeAddrs = this._unsignedTx.change.map(change => change.address);
+      return outputStrings.filter(addr => !changeAddrs.includes(addr));
+    }
+    return outputStrings;
+  }
+
+  isEqual(tx: any): boolean {
+    // ToDo: fix this implementation
+    return tx === this;
+  }
+
+  self(): UnsignedTx {
+    return this._unsignedTx;
+  }
+}
 
 export class HaskellShelleyTxSignRequest
 implements ISignRequest<RustModule.WalletV4.TransactionBuilder> {

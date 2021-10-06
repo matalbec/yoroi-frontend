@@ -129,7 +129,7 @@ import type {
   V4UnsignedTxAddressedUtxoResponse,
   CardanoAddressedUtxo,
 } from './transactions/types';
-import { HaskellShelleyTxSignRequest, } from './transactions/shelley/HaskellShelleyTxSignRequest';
+import { HaskellShelleyTxSignRequest, YoroiLibSignRequest } from './transactions/shelley/HaskellShelleyTxSignRequest';
 import type { SignTransactionRequest } from '@cardano-foundation/ledgerjs-hw-app-cardano';
 import { WrongPassphraseError } from './lib/cardanoCrypto/cryptoErrors';
 
@@ -1085,9 +1085,129 @@ export default class AdaApi {
     }
   }
 
+  async createUnsignedTxUsingYoroiLib(
+    request: CreateUnsignedTxRequest
+  ): Promise<YoroiLibSignRequest> {
+    const utxos = await request.publicDeriver.getAllUtxos();
+    const filteredUtxos = utxos.filter(utxo => request.filter(utxo));
+
+    const sender = await getReceiveAddress(request.publicDeriver);
+    if (sender == null) {
+      throw new Error(`${nameof(this.createUnsignedTx)} no internal addresses left. Should never happen`);
+    }
+
+    const yoroiLibUtxos = filteredUtxos.map(u => {
+      // $FlowFixMe: nothing to be fixed here, flow is just being annoying
+      const aUtxo: YoroiLibModels.AddressingUtxo = {
+        address: u.address,
+        addressing: {
+          path: u.addressing.path,
+          startLevel: u.addressing.startLevel
+        },
+        output: {
+          transaction: {
+            hash: u.output.Transaction.Hash
+          },
+          utxoTransactionOutput: {
+            outputIndex: u.output.UtxoTransactionOutput.OutputIndex
+          },
+          tokens: u.output.tokens.map(t => {
+            // $FlowFixMe
+            const utxoToken: {
+              // $FlowFixMe
+              tokenList: YoroiLibModels.TokenList;
+              // $FlowFixMe
+              token: YoroiLibModels.Token;
+            } = {
+              token: {
+                identifier: t.Token.Identifier,
+                isDefault: t.Token.IsDefault,
+                networkId: t.Token.NetworkId
+              },
+              tokenList: {
+                amount: t.TokenList.Amount
+              }
+            }
+            return utxoToken
+          })
+        }
+      }
+      return aUtxo
+    });
+
+    const yoroiLibTokens = request.tokens.map(t => {
+      // $FlowFixMe
+      const x: YoroiLibModels.SendToken = {
+        token: {
+          identifier: t.token.Identifier,
+          isDefault: t.token.IsDefault,
+          networkId: t.token.NetworkId
+        },
+        // $FlowFixMe
+        amount: t.amount,
+        // $FlowFixMe
+        shouldSendAll: t.shouldSendAll
+      }
+      return x;
+    });
+
+    const network = request.publicDeriver.getParent().getNetworkInfo();
+    const config = getCardanoHaskellBaseConfig(
+      network
+    ).reduce((acc, next) => Object.assign(acc, next), {});
+
+    const chc = {
+      keyDeposit: config.KeyDeposit,
+      linearFee: {
+        coefficient: config.LinearFee.coefficient,
+        constant: config.LinearFee.constant
+      },
+      minimumUtxoVal: config.MinimumUtxoVal,
+      poolDeposit: config.PoolDeposit,
+      networkId: network.NetworkId
+    };
+
+    const defaultToken = request.publicDeriver.getParent().getDefaultToken();
+    const yoroiLibDefaultToken = {
+      defaultNetworkId: defaultToken.defaultNetworkId,
+      defaultIdentifier: defaultToken.defaultIdentifier,
+    };
+
+    const yoroiLibBrowser = await import('yoroi-lib-browser/dist/yoroi-lib-browser/src');
+    const init = yoroiLibBrowser.init;
+    const yoroiLib = init();
+
+    const unsignedTx = await yoroiLib.createUnsignedTx(
+      request.absSlotNumber,
+      yoroiLibUtxos,
+      request.receiver,
+      {
+        address: sender.addr.Hash,
+        addressing: sender.addressing,
+      },
+      yoroiLibTokens,
+      chc,
+      yoroiLibDefaultToken,
+      {}
+    );
+
+    return new YoroiLibSignRequest(
+      unsignedTx,
+      {
+        ChainNetworkId: Number.parseInt(config.ChainNetworkId, 10),
+        KeyDeposit: new BigNumber(config.KeyDeposit),
+        PoolDeposit: new BigNumber(config.PoolDeposit),
+        NetworkId: network.NetworkId,
+      }
+    )
+  }
+
   async createUnsignedTx(
     request: CreateUnsignedTxRequest
   ): Promise<CreateUnsignedTxResponse> {
+    console.log('TEST');
+    await this.createUnsignedTxUsingYoroiLib(request);
+
     const utxos = await request.publicDeriver.getAllUtxos();
     const filteredUtxos = utxos.filter(utxo => request.filter(utxo));
 
