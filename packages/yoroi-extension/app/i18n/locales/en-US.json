@@ -201,7 +201,7 @@
   "noticeBoard.notice.stakeUndelegated.subMessage": "Rewards for next two epochs will still be received",
   "noticeBoard.notice.stakeUndelegated.title": "You have undelegated from the pool [{poolTicker}]",
   "noticeBoard.topbar.title": "Notification",
-  "notprod.label.message": "WARNING: non-production build. If unexpected, double-check Yoroi installation.",
+  "notprod.label.message": "WARNING: non-production build. If unexpected, double-check Yoroi installation. TOTALLY EXPERIMENTAL BRANCH!!!",
   "profile.complexityLevel.advanced": "Advanced",
   "profile.complexityLevel.advanced.description": "I have some understanding of blockchain and how cryptography is used to power both the blockchain itself and the wallet software. I am okay with seeing options and functionality that critically depend on my understanding of these concepts.",
   "profile.complexityLevel.selected.label": "Your current level of Complexity is",
