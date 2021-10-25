@@ -212,7 +212,7 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
           this.createAdaTransaction();
         }
         if (response.sign.type === 'tx-create-req/cardano') {
-          this.prepareAdaTransaction();
+          this.generateAdaTransaction();
         }
       })
       // eslint-disable-next-line no-console
@@ -308,7 +308,7 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
         this.createAdaTransaction();
       }
       if (this.signingMessage?.sign.type === 'tx-create-req/cardano') {
-        this.prepareAdaTransaction();
+        this.generateAdaTransaction();
       }
     } catch (err) {
       runInAction(() => {
@@ -470,7 +470,7 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
     });
   }
 
-  prepareAdaTransaction: void => Promise<void> = async () => {
+  generateAdaTransaction: void => Promise<void> = async () => {
     if (this.signingMessage == null) return;
     const { signingMessage } = this;
     const selectedWallet = this.wallets.find(
@@ -480,9 +480,6 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
     if (selectedWallet == null) return undefined;
     if (!signingMessage.sign.tx) return undefined;
 
-    // $FlowFixMe[prop-missing]
-    const tx: CardanoTxRequest  = signingMessage.sign.tx;
-    
     const network = selectedWallet.publicDeriver.getParent().getNetworkInfo();
 
     if (isCardanoHaskell(network)) {
@@ -502,25 +499,13 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
         time: new Date(),
       }).slot);
 
-      const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(
-        network.NetworkId
-      );
-
-      const tokens = [{
-        token: defaultToken,
-        amount: tx.amount,
-      }];
-      // TODO: handle min amount as TransactionBuilderStore does
-
-      this.api.ada.createUnsignedTx({
+      this.api.ada.createUnsignedTxForConnector({
         publicDeriver: withHasUtxoChains,
-        receiver: tx.receiver,
-        tokens,
-        filter: () => true,
         absSlotNumber,
-        metadata: undefined,
+        caradanoTxRequest: signingMessage.sign.tx,
       }).then(result => {
         runInAction(() => {
+          // fixme
           this.adaTransaction = {
             inputs: [],
             outputs: [],

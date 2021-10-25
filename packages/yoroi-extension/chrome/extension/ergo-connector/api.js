@@ -523,9 +523,8 @@ export async function connectorSignCardanoTx(
 export async function connectorCreateCardanoTx(
   publicDeriver: IPublicDeriver<ConceptualWallet>,
   password: string,
-  tx: CardanoTxRequest,
+  cardanoTxRequest: CardanoTxRequest,
 ): Promise<string> {
-  return;
   const withUtxos = asGetAllUtxos(publicDeriver);
   if (withUtxos == null) {
     throw new Error(`missing utxo functionality`);
@@ -543,37 +542,11 @@ export async function connectorCreateCardanoTx(
     time: new Date(),
   }).slot);
 
-  // TODO
-  const defaultToken = {
-    TokenId: 4,
-    NetworkId: 300,
-    IsDefault: true,
-    Identifier: '',
-    Digest: -6.1389758346808205e-55,
-    Metadata: {
-      type: 'Cardano',
-      policyId: '',
-      assetName: '',
-      ticker: 'TADA',
-      longName: null,
-      numberOfDecimals: 6
-    }
-  };
-
-  const tokens = [{
-    token: defaultToken,
-    amount: tx.amount,
-  }];
-  // TODO: handle min amount as TransactionBuilderStore does
-
   const adaApi = new AdaApi();
-  const signRequest = await adaApi.createUnsignedTx({
+  const signRequest = await adaApi.createUnsignedTxForConnector({
     publicDeriver: withHasUtxoChains,
-    receiver: tx.receiver,
-    tokens,
-    filter: () => true,
     absSlotNumber,
-    metadata: undefined,
+    cardanoTxRequest,
   });
 
   const withSigningKey = asGetSigningKey(publicDeriver);

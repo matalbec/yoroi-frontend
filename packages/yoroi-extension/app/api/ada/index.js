@@ -1119,6 +1119,122 @@ export default class AdaApi {
     });
   }
 
+  async createUnsignedTxForConnector(
+    request: CreateUnsignedTxForConnectorRequest
+  ): Promise<CreateUnsignedTxResponse> {
+    const utxos = asAddressedUtxo(
+      await request.publicDeriver.getAllUtxos()
+    );
+    const utxoIdSet = new Set(
+      request.cardanoTxRequest.includeInputs ?? []
+    );
+    const mustIncludeUtxos = [];
+    const coinSelectUtxos = [];
+    for (let i = 0; i < utxos.length; i++) {
+      const utxo = utxos[i];
+      if (utxoIdSet.has(i)) {
+        mustIncludeUtxos.push(utxo);
+      } else {
+        coinSelectUtxos.push(utxo);
+      }
+    }
+
+    const receivers = [{
+      address: request.receiver
+    }];
+
+    const internal = await getReceiveAddress(request.publicDeriver);
+    if (internal == null) {
+      throw new Error(`no internal addresses left. Should never happen`);
+    }
+    receivers.push({
+      address: internal.addr.Hash,
+      addressing: internal.addressing,
+    });
+
+    const config = getCardanoHaskellBaseConfig(
+      request.network
+    ).reduce((acc, next) => Object.assign(acc, next), {});
+
+    const protocolParams = {
+      keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
+      linearFee: RustModule.WalletV4.LinearFee.new(
+        RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
+        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant),
+      ),
+      minimumUtxoVal: RustModule.WalletV4.BigNum.from_str(config.MinimumUtxoVal),
+      poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
+      networkId: request.publicDeriver.getParent().getNetworkInfo().NetworkId,
+    };
+
+    const defaultToken = request.publicDeriver.getParent().getDefaultToken();
+    debugger
+    
+    const outputs = request.cardanoTxRequest.includeOutputs ?? [];
+    for (const target of request.cardanoTxRequest.includeTargets ?? []) {
+      // todo: handle ensureRequiredMinimalValue
+      const values = [
+        {
+          identifier: '',
+          networkId protocolParams.networkId,
+          amount: new BigNumber(target.value),
+        },
+      ];
+      for (let assetId in target.assets ?? {}) {
+        values.push({
+          identifier: assetId,
+          networkId: protocolParams.networkId,
+          amount: new BigNumber(target.assets[assetId]),
+        });
+      }
+      const tokens = new MultiToken(
+        values;
+        {
+          defaultNetworkId: protocolParams.networkId,
+          defaultIdentifier: '',
+        },
+      );
+      outpus.push(
+        RustModule.WalletV4.TransactionOutput.new(
+          RustModule.WalletV4.Address.from_bytes(
+            Buffer.from(target.address, 'hex')
+          ),
+          cardanoValueFromMultiToken(tokens),
+        )
+      );
+    }
+    
+    const unsignedTxResponse = shelleyNewAdaUnsignedTx(
+      outputs, // outputs
+      internal, // change
+      coinSelectUtxos,
+      request.absSlotNumber,
+      protocolParams,
+      [],
+      [],
+      false,
+      undefined,
+    );
+
+    );
+    return new HaskellShelleyTxSignRequest({
+      senderUtxos: unsignedTxResponse.senderUtxos,
+      unsignedTx: unsignedTxResponse.txBuilder,
+      changeAddr: unsignedTxResponse.changeAddr,
+      metadata: undefined,
+      networkSettingSnapshot: {
+        ChainNetworkId: Number.parseInt(config.ChainNetworkId, 10),
+        KeyDeposit: new BigNumber(config.KeyDeposit),
+        PoolDeposit: new BigNumber(config.PoolDeposit),
+        NetworkId: request.network.NetworkId,
+      },
+      neededStakingKeyHashes: {
+        neededHashes: new Set(),
+        wits: new Set(),
+      },
+    });
+  }
+
   async createDelegationTx(
     request: CreateDelegationTxRequest
   ): Promise<CreateDelegationTxResponse> {
