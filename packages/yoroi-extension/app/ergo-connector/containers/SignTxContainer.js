@@ -175,6 +175,52 @@ export default class SignTxContainer extends Component<
         );
         break;
       }
+      case 'tx-create-req/cardano':
+        const txData = this.generated.stores.connector.adaTransaction;
+        if (txData == null) return this.renderLoading();
+        component = (
+          <CardanoSignTxPage
+            onCopyAddressTooltip={(address, elementId) => {
+              if (!uiNotifications.isOpen(elementId)) {
+                runInAction(() => {
+                  this.notificationElementId = elementId;
+                });
+                actions.notifications.open.trigger({
+                  id: elementId,
+                  duration: tooltipNotification.duration,
+                  message: tooltipNotification.message,
+                });
+              }
+            }}
+            notification={
+              this.notificationElementId == null
+                ? null
+                : uiNotifications.getTooltipActiveNotification(this.notificationElementId)
+            }
+            tx={signingMessage.sign.tx}
+            txData={txData}
+            getTokenInfo={genLookupOrFail(this.generated.stores.tokenInfoStore.tokenInfo)}
+            defaultToken={selectedWallet.publicDeriver.getParent().getDefaultToken()}
+            network={selectedWallet.publicDeriver.getParent().getNetworkInfo()}
+            onConfirm={this.onConfirm}
+            onCancel={this.onCancel}
+            addressToDisplayString={addr => addressToDisplayString(
+              addr,
+              selectedWallet.publicDeriver.getParent().getNetworkInfo()
+            )}
+            getCurrentPrice={this.generated.stores.coinPriceStore.getCurrentPrice}
+            selectedExplorer={
+              this.generated.stores.explorers.selectedExplorer.get(
+                selectedWallet.publicDeriver.getParent().getNetworkInfo().NetworkId
+              ) ??
+              (() => {
+                throw new Error('No explorer for wallet network');
+              })()
+            }
+            unitOfAccountSetting={this.generated.stores.profile.unitOfAccount}
+          />
+        );
+      break;
       default:
         component = null;
     }

@@ -520,6 +520,90 @@ export async function connectorSignCardanoTx(
   return Buffer.from(signedTx.witness_set().to_bytes()).toString('hex');
 }
 
+export async function connectorCreateCardanoTx(
+  publicDeriver: IPublicDeriver<ConceptualWallet>,
+  password: string,
+  tx: CardanoTxRequest,
+): Promise<string> {
+  return;
+  const withUtxos = asGetAllUtxos(publicDeriver);
+  if (withUtxos == null) {
+    throw new Error(`missing utxo functionality`);
+  }
+
+  const withHasUtxoChains = asHasUtxoChains(withUtxos);
+  if (withHasUtxoChains == null) {
+    throw new Error(`missing chains functionality`);
+  }
+
+  const network = publicDeriver.getParent().getNetworkInfo();
+  const fullConfig = getCardanoHaskellBaseConfig(network);
+  const timeToSlot = genTimeToSlot(fullConfig);
+  const absSlotNumber = new BigNumber(timeToSlot({
+    time: new Date(),
+  }).slot);
+
+  // TODO
+  const defaultToken = {
+    TokenId: 4,
+    NetworkId: 300,
+    IsDefault: true,
+    Identifier: '',
+    Digest: -6.1389758346808205e-55,
+    Metadata: {
+      type: 'Cardano',
+      policyId: '',
+      assetName: '',
+      ticker: 'TADA',
+      longName: null,
+      numberOfDecimals: 6
+    }
+  };
+
+  const tokens = [{
+    token: defaultToken,
+    amount: tx.amount,
+  }];
+  // TODO: handle min amount as TransactionBuilderStore does
+
+  const adaApi = new AdaApi();
+  const signRequest = await adaApi.createUnsignedTx({
+    publicDeriver: withHasUtxoChains,
+    receiver: tx.receiver,
+    tokens,
+    filter: () => true,
+    absSlotNumber,
+    metadata: undefined,
+  });
+
+  const withSigningKey = asGetSigningKey(publicDeriver);
+  if (!withSigningKey) {
+    throw new Error('expect to be able to get signing key');
+  }
+  const signingKey = await withSigningKey.getSigningKey();
+  const normalizedKey = await withSigningKey.normalizeKey({
+    ...signingKey,
+    password,
+  });
+
+  const withLevels = asHasLevels<ConceptualWallet>(publicDeriver);
+  if (!withLevels) {
+    throw new Error(`can't get level`);
+  }
+
+  const signedTx = shelleySignTransaction(
+    signRequest.senderUtxos,
+    signRequest.unsignedTx,
+    withLevels.getParent().getPublicDeriverLevel(),
+    RustModule.WalletV4.Bip32PrivateKey.from_bytes(
+      Buffer.from(normalizedKey.prvKeyHex, 'hex')
+    ),
+    signRequest.neededStakingKeyHashes.wits,
+    signRequest.metadata,
+  );
+  return Buffer.from(signedTx.to_bytes()).toString('hex');
+}
+
 export async function connectorSendTx(
   wallet: IPublicDeriver</* ConceptualWallet */>,
   pendingTxs: PendingTransaction[],

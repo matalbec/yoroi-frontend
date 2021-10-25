@@ -8,6 +8,7 @@ const getAccountBalance = document.querySelector('#get-balance')
 const getUtxos = document.querySelector('#get-utxos')
 const submitTx = document.querySelector('#submit-tx')
 const signTx = document.querySelector('#sign-tx')
+const createTx = document.querySelector('#create-tx')
 const alertEl = document.querySelector('#alert')
 const spinner = document.querySelector('#spinner')
 
@@ -220,6 +221,28 @@ signTx.addEventListener('click', () => {
     console.error(error)
     toggleSpinner('hide')
     alertWarrning('Signing tx fails')
+  })
+    })
+
+createTx.addEventListener('click', () => {
+  toggleSpinner('show');
+  
+  if (!accessGranted) {
+    alertError('Should request access first');
+    return;
+  }
+
+
+  const txReq = { amount: '1000000', receiver: '00756c95f9967c214e571500a0140b88f6dd9c4a7444e74acc1841ce92c3892366f174a76af9252f78368f5747d3055ab3568ea3b6bf40b01e' };
+  
+  cardanoApi.create_tx(txReq, true).then(txHex => {
+    toggleSpinner('hide')
+    alertSuccess('Creating tx succeeds: ')
+    transactionHex = txHex
+  }).catch(error => {
+    console.error(error)
+    toggleSpinner('hide')
+    alertWarrning('Creating tx fails')
   })
 })
 

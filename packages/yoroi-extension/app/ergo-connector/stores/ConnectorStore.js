@@ -29,6 +29,7 @@ import {
   isCardanoHaskell,
   isErgo,
   getErgoBaseConfig,
+  getCardanoHaskellBaseConfig,
 } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import {
   asGetBalance,
@@ -52,7 +53,7 @@ import type { CardanoConnectorSignRequest } from '../types';
 import {
   asAddressedUtxo,
 } from '../../api/ada/transactions/utils';
-
+import { genTimeToSlot, } from '../../api/ada/lib/storage/bridge/timeUtils';
 
 // Need to run only once - Connecting wallets
 let initedConnecting = false;
@@ -210,6 +211,9 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
         if (response.sign.type === 'tx/cardano') {
           this.createAdaTransaction();
         }
+        if (response.sign.type === 'tx-create-req/cardano') {
+          this.prepareAdaTransaction();
+        }
       })
       // eslint-disable-next-line no-console
       .catch(err => console.error(err));
@@ -270,7 +274,10 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
       const filteredWallets = wallets
       .filter(wallet => protocolFilter(wallet));
 
-      if (this.signingMessage?.sign.type !== 'tx/cardano') {
+      if (
+        this.signingMessage?.sign.type !== 'tx/cardano' &&
+          this.signingMessage?.sign.type !== 'tx-create-req/cardano'
+      ) {
         await this._getTxAssets(filteredWallets);
       }
 
@@ -299,6 +306,9 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
       });
       if (this.signingMessage?.sign.type === 'tx/cardano') {
         this.createAdaTransaction();
+      }
+      if (this.signingMessage?.sign.type === 'tx-create-req/cardano') {
+        this.prepareAdaTransaction();
       }
     } catch (err) {
       runInAction(() => {
@@ -458,6 +468,75 @@ export default class ConnectorStore extends Store<StoresMap, ActionsMap> {
     runInAction(() => {
       this.adaTransaction = { inputs, outputs, fee };
     });
+  }
+
+  prepareAdaTransaction: void => Promise<void> = async () => {
+    if (this.signingMessage == null) return;
+    const { signingMessage } = this;
+    const selectedWallet = this.wallets.find(
+      wallet => wallet.publicDeriver.getPublicDeriverId() === signingMessage.publicDeriverId
+    );
+
+    if (selectedWallet == null) return undefined;
+    if (!signingMessage.sign.tx) return undefined;
+
+    // $FlowFixMe[prop-missing]
+    const tx: CardanoTxRequest  = signingMessage.sign.tx;
+    
+    const network = selectedWallet.publicDeriver.getParent().getNetworkInfo();
+
+    if (isCardanoHaskell(network)) {
+      const withUtxos = asGetAllUtxos(selectedWallet.publicDeriver);
+      if (withUtxos == null) {
+        throw new Error(`missing utxo functionality`);
+      }
+
+      const withHasUtxoChains = asHasUtxoChains(withUtxos);
+      if (withHasUtxoChains == null) {
+        throw new Error(`missing chains functionality`);
+      }
+
+      const fullConfig = getCardanoHaskellBaseConfig(network);
+      const timeToSlot = await genTimeToSlot(fullConfig);
+      const absSlotNumber = new BigNumber(timeToSlot({
+        time: new Date(),
+      }).slot);
+
+      const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(
+        network.NetworkId
+      );
+
+      const tokens = [{
+        token: defaultToken,
+        amount: tx.amount,
+      }];
+      // TODO: handle min amount as TransactionBuilderStore does
+
+      this.api.ada.createUnsignedTx({
+        publicDeriver: withHasUtxoChains,
+        receiver: tx.receiver,
+        tokens,
+        filter: () => true,
+        absSlotNumber,
+        metadata: undefined,
+      }).then(result => {
+        runInAction(() => {
+          this.adaTransaction = {
+            inputs: [],
+            outputs: [],
+            fee: {
+              tokenId: defaultToken.Identifier,
+              networkId: defaultToken.NetworkId,
+              amount: '19999',
+            }
+          };
+        });
+      }).catch(error => {
+        console.error('createUnsignedTx failed:', error);
+      });
+    } else {
+      throw new Error(`${nameof(ConnectorStore)}::${nameof(this.createAdaTransaction)} unexpected wallet type`);
+    }
   }
 
   @computed get signingRequest(): ?ISignRequest<any> {
