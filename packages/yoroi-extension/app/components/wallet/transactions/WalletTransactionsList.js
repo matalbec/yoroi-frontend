@@ -2,9 +2,8 @@
 import { Component } from 'react';
 import type { Node } from 'react';
 import { observer } from 'mobx-react';
-import { defineMessages, intlShape } from 'react-intl';
+import { defineMessages, intlShape, FormattedDate } from 'react-intl';
 import { Button } from '@mui/material';
-import moment from 'moment';
 import styles from './WalletTransactionsList.scss';
 import Transaction from './Transaction';
 import WalletTransaction from '../../../domain/WalletTransaction';
@@ -31,8 +30,6 @@ const messages = defineMessages({
     defaultMessage: '!!!Show more transactions',
   },
 });
-
-const dateFormat = 'YYYY-MM-DD';
 
 type Props = {|
   +transactions: Array<WalletTransaction>,
@@ -63,30 +60,21 @@ export default class WalletTransactionsList extends Component<Props> {
     intl: intlShape.isRequired,
   };
 
-  // eslint-disable-next-line camelcase
-  UNSAFE_componentWillMount(): void {
-    this.localizedDateFormat = moment.localeData().longDateFormat('L');
-    // Localized dateFormat:
-    // English - MM/DD/YYYY
-    // Japanese - YYYY/MM/DD
-  }
-
   list: HTMLElement;
   loadingSpinner: ?LoadingSpinner;
-  localizedDateFormat: 'MM/DD/YYYY';
 
   groupTransactionsByDay(transactions: Array<WalletTransaction>): Array<{|
-    date: string,
+    date: Date,
     transactions: Array<WalletTransaction>,
   |}> {
     const groups: Array<{|
-      date: string,
+      date: Date,
       transactions: Array<WalletTransaction>,
     |}> = [];
     for (const transaction of transactions) {
-      const date: string = moment(transaction.date).format(dateFormat);
+      const date: Date = new Date(transaction.date);
       // find the group this transaction belongs in
-      let group = groups.find((g) => g.date === date);
+      let group = groups.find((g) => g.date.toDateString() === date.toDateString());
       // if first transaction in this group, create the group
       if (!group) {
         group = { date, transactions: [] };
@@ -99,13 +87,15 @@ export default class WalletTransactionsList extends Component<Props> {
     );
   }
 
-  localizedDate(date: string): string {
+  localizedDate(date: Date): Node {
     const { intl } = this.context;
-    const today = moment().format(dateFormat);
-    if (date === today) return intl.formatMessage(globalMessages.dateToday);
-    const yesterday = moment().subtract(1, 'days').format(dateFormat);
-    if (date === yesterday) return intl.formatMessage(globalMessages.dateYesterday);
-    return moment(date).format(this.localizedDateFormat);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString())
+      return (<div>{intl.formatMessage(globalMessages.dateToday)}</div>);
+    const yesterday = new Date(today.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString())
+      return (<div>{intl.formatMessage(globalMessages.dateYesterday)}</div>);
+    return (<FormattedDate value={date} />);
   }
 
   getTransactionKey(transactions: Array<WalletTransaction>): string {

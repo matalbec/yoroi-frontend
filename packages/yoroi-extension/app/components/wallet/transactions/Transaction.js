@@ -2,11 +2,10 @@
 import React, { Component } from 'react';
 import type { Node } from 'react';
 import { observer } from 'mobx-react';
-import { defineMessages, intlShape } from 'react-intl';
+import { defineMessages, intlShape, FormattedTime } from 'react-intl';
 import type {
   $npm$ReactIntl$IntlFormat,
 } from 'react-intl';
-import moment from 'moment';
 import classnames from 'classnames';
 import styles from './Transaction.scss';
 import AddMemoSvg from '../../../assets/images/add-memo.inline.svg';
@@ -628,7 +627,9 @@ export default class Transaction extends Component<Props, State> {
           <div className={styles.togglerContent}>
             <div className={styles.header}>
               <div className={styles.time}>
-                {moment(data.date).format('hh:mm:ss A')}
+                <FormattedTime
+                  value={new Date(data.date)}
+                />
               </div>
               <div className={styles.type}>
                 {this.getTxTypeMsg(
